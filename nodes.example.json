@@ -1,0 +1,24 @@
+{
+  "_comment": "节点清单模板（脱敏）。真实凭据见本地 CREDENTIALS.md / nodes.json（不入 git）",
+  "api": "http://<MANAGER_IP>:8082",
+  "nodes": [
+    {
+      "node_id": "proxy-<IP>",
+      "ip": "<IP>",
+      "port": 3128,
+      "region": "US",
+      "protocol": "http",
+      "username": "3proxy",
+      "password": "<STRONG_PASSWORD>"
+    },
+    {
+      "node_id": "proxy-<IP>",
+      "ip": "<IP>",
+      "port": 3128,
+      "region": "JP",
+      "protocol": "http",
+      "username": "3proxy",
+      "password": "<STRONG_PASSWORD>"
+    }
+  ]
+}

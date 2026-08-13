@@ -1,0 +1,68 @@
+version: "3.9"
+
+services:
+  api:
+    build: ./api
+    container_name: pp-api
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6380
+      - REDIS_DB=0
+      - POOL_PREFIX=proxy-pool
+    depends_on:
+      - redis
+    networks:
+      - pp-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+
+  redis:
+    image: redis:7
+    container_name: pp-redis
+    restart: unless-stopped
+    command: ["redis-server", "--port", "6380"]
+    # internal only, not exposed to host
+    networks:
+      - pp-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: pp-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    networks:
+      - pp-net
+
+  graf避开冲突。 grafana:
+    image: grafana/grafana:latest
+    container_name: pp-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+    environment:
+ ngaran:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=true
+    networks:
+      - pp-net
+
+networks:
+  pp-net:
+    driver: bridge

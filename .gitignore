@@ -1,0 +1,25 @@
+# 真实凭据 —— 绝不入库
+CREDENTIALS.md
+nodes.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 环境与密钥
+.env
+.env.*
+*.pem
+*.key
+
+# 部署中间产物
+*.tar.gz
+*.bak
+
+# 编辑器 / 系统
+.DS_Store
+.vscode/
+.idea/
