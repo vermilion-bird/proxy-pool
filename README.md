@@ -146,6 +146,28 @@ curl -X POST http://<MGR>:8082/api/v1/proxies/report \
 
 ---
 
+## 📊 监控指标
+
+API 暴露 Prometheus 业务指标（`GET /metrics`），Grafana 看板（`Proxy Pool / Overview`）已自动配置。
+
+| 指标 | 类型 | 说明 |
+|------|------|------|
+| `proxy_pool_nodes_total` | Gauge | 已注册节点总数 |
+| `proxy_pool_nodes_healthy` | Gauge | 健康节点数 |
+| `proxy_pool_nodes_healthy_by_region` | Gauge | 各区域健康节点数（`region` 标签）|
+| `proxy_pool_acquire_total` | Counter | 代理分配次数（`region` 标签）|
+| `proxy_pool_acquire_errors_total` | Counter | 分配失败次数（无健康节点 → 503）|
+| `proxy_pool_report_total` | Counter | 使用结果上报次数（`result`: success/failure）|
+| `proxy_pool_report_latency_seconds` | Histogram | 上报的上游延迟（秒）|
+| `proxy_pool_register_total` | Counter | 节点注册次数 |
+| `proxy_pool_heartbeat_total` | Counter | 节点心跳次数 |
+| `proxy_pool_node_state_changes_total` | Counter | 节点状态变迁（`transition` 标签）|
+| `proxy_pool_http_requests_total` | Counter | 管理 API 请求量（`method`/`path` 标签）|
+
+Grafana 面板：池规模、按区域健康节点、请求 QPS、acquire 成功/失败、上报吞吐、延迟分位数（p50/p95/p99）、注册/心跳速率、状态变迁。
+
+---
+
 ## 🗺 路线图
 
 - [x] 基础代理能力（5 节点 3proxy）— HTTP/SOCKS5 + 认证

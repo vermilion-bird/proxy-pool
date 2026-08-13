@@ -1,0 +1,211 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "background"},
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "red", "value": 80}]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "id": 100,
+      "type": "stat",
+      "title": "Registered Nodes",
+      "targets": [{"expr": "proxy_pool_nodes_total", "legendFormat": "nodes", "refId": "A"}],
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "values": false, "fields": "", "limit": 100}}
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "background"},
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red"}, {"color": "green", "value": 1}]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "id": 101,
+      "type": "stat",
+      "title": "Healthy Nodes",
+      "targets": [{"expr": "proxy_pool_nodes_healthy", "legendFormat": "healthy", "refId": "A"}],
+      "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "values": false, "fields": "", "limit": 100}}
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"fillOpacity": 60, "lineWidth": 1, "showPoints": "never"},
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "id": 102,
+      "type": "timeseries",
+      "title": "Healthy Nodes by Region",
+      "targets": [{"expr": "proxy_pool_nodes_healthy_by_region", "legendFormat": "{{region}}", "refId": "A"}],
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"]}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"fillOpacity": 20, "lineWidth": 1, "showPoints": "never"},
+          "mappings": [],
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 103,
+      "type": "timeseries",
+      "title": "API Requests / sec",
+      "targets": [{"expr": "rate(proxy_pool_http_requests_total[$__rate_interval])", "legendFormat": "{{method}} {{path}}", "refId": "A"}],
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"]}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"fillOpacity": 20, "lineWidth": 1, "showPoints": "never"},
+          "mappings": [],
+          "unit": "reqps"
+        },
+        "overrides": [{"matcher": {"id": "byName", "options": "errors"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]}]
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 104,
+      "type": "timeseries",
+      "title": "Acquire / sec (errors in red)",
+      "targets": [
+        {"expr": "sum(rate(proxy_pool_acquire_total[$__rate_interval]))", "legendFormat": "acquire", "refId": "A"},
+        {"expr": "sum(rate(proxy_pool_acquire_errors_total[$__rate_interval]))", "legendFormat": "errors", "refId": "B"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"fillOpacity": 20, "lineWidth": 1, "showPoints": "never"},
+          "mappings": [],
+          "unit": "reqps"
+        },
+        "overrides": [{"matcher": {"id": "byName", "options": "failure"}, "properties": [{"id": "color", "value": {"fixedColor": "orange", "mode": "fixed"}}]}]
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "id": 105,
+      "type": "timeseries",
+      "title": "Report throughput (success vs failure)",
+      "targets": [
+        {"expr": "sum(rate(proxy_pool_report_total{result=\"success\"}[$__rate_interval]))", "legendFormat": "success", "refId": "A"},
+        {"expr": "sum(rate(proxy_pool_report_total{result=\"failure\"}[$__rate_interval]))", "legendFormat": "failure", "refId": "B"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"fillOpacity": 0, "lineWidth": 2, "showPoints": "never"},
+          "mappings": [],
+          "unit": "s",
+          "decimals": 3
+        },
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "p50"}, "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "p95"}, "properties": [{"id": "color", "value": {"fixedColor": "orange", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "p99"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]}
+        ]
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "id": 106,
+      "type": "timeseries",
+      "title": "Reported latency quantiles",
+      "targets": [
+        {"expr": "histogram_quantile(0.50, sum(rate(proxy_pool_report_latency_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "p50", "refId": "A"},
+        {"expr": "histogram_quantile(0.95, sum(rate(proxy_pool_report_latency_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "p95", "refId": "B"},
+        {"expr": "histogram_quantile(0.99, sum(rate(proxy_pool_report_latency_seconds_bucket[$__rate_interval])) by (le))", "legendFormat": "p99", "refId": "C"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"fillOpacity": 25, "lineWidth": 1, "showPoints": "never"},
+          "mappings": [],
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "id": 107,
+      "type": "timeseries",
+      "title": "Register / Heartbeat rate",
+      "targets": [
+        {"expr": "sum(rate(proxy_pool_register_total[$__rate_interval]))", "legendFormat": "register", "refId": "A"},
+        {"expr": "sum(rate(proxy_pool_heartbeat_total[$__rate_interval]))", "legendFormat": "heartbeat", "refId": "B"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"fillOpacity": 25, "lineWidth": 1, "showPoints": "never"},
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "id": 108,
+      "type": "timeseries",
+      "title": "Node state transitions",
+      "targets": [{"expr": "sum by (transition) (rate(proxy_pool_node_state_changes_total[$__rate_interval]))", "legendFormat": "{{transition}}", "refId": "A"}],
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"]}, "tooltip": {"mode": "multi"}}
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "Proxy Pool / Overview",
+  "uid": "proxy-pool-overview",
+  "version": 2
+}
