@@ -66,9 +66,6 @@ services:
     networks:
       - pp-net
 
-volumes:
-  pp-pgdata:
-
   grafana:
     image: grafana/grafana:latest
     container_name: pp-grafana
@@ -95,6 +92,9 @@ volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     networks:
       - pp-net
+
+volumes:
+  pp-pgdata:
 
 networks:
   pp-net:
