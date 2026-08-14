@@ -9,6 +9,13 @@
 
 ### Added
 
+- **健康检查增强**（v1.1.0）：自动后台巡检 + 状态机防抖
+  - HealthChecker 按 `PP_HC_INTERVAL`（默认 30s）周期扫描全部节点：TCP 拨号 + HTTP 经代理探测
+  - 连续失败 3 次 → degraded 摘除，5 次 → dead（`PP_HC_FAIL_DEGRADED` / `PP_HC_FAIL_DEAD`）
+  - degraded/dead 连续成功 3 次 → healthy 回池（`PP_HC_RECOVER`），防抖避免状态抖动
+  - maintenance / disabled 人工状态不参与自动迁移
+  - 状态变迁接入 `proxy_pool_node_state_changes_total` 指标
+  - 单元测试：`api/tests/test_health_check.py`（11 个用例，含真实 TCP 拨号验证）
 - **加权随机调度**（v1.1.0）：替换纯随机的 acquire 分配
   - 按 成功率(0.5) + 延迟(0.3) + 负载(0.2) 加权随机选择健康节点
   - 分数一致或全 0 时退化为均匀随机，兼容无统计数据的节点
@@ -53,7 +60,7 @@
 ### v1.1.x — 调度增强 + 安全加固
 
 - [x] **加权随机调度**：按 成功率 / 延迟 / 负载 加权随机分配 —— 已交付，见 [Unreleased]
-- [ ] **健康检查增强**：TCP/HTTP 探活 + 连续失败摘除、连续成功恢复（防抖），节点状态机
+- [x] **健康检查增强**：TCP/HTTP 探活 + 连续失败摘除、连续成功恢复（防抖），节点状态机 —— 已交付，见 [Unreleased]
 - [x] **管理 API 认证**：API Key + IP 白名单（保护 register/heartbeat 等写接口）—— 已交付，见 [Unreleased]
 - [ ] **节点 Agent 增强**：自动注册、心跳上报、本地 3proxy 配置管理与指标采集
 

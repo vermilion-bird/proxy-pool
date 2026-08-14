@@ -71,21 +71,36 @@ Redis：`proxy:sticky:{account_id}` + TTL（30min / 1h / 6h）。
 
 ## 二、健康检查
 
-### 检查频率
+### 检查频率（v1.1 已实现：自动后台巡检）
 
-| 等级 | 频率 | 内容 |
-|------|------|------|
-| 基础心跳 | 10s | 节点 Agent 上报，Redis TTL 判定失联 |
-| 代理检测 | 30s | TCP 拨号 3128/1080 + HTTP 探测 |
-| 深度检测 | 5min | CONNECT HTTPS + 公网 IP 校验 + 延迟 |
+| 等级 | 频率 | 内容 | 实现 |
+|------|------|------|:---:|
+| 基础心跳 | 10s | 节点 Agent 上报（`/heartbeat`）| ✅ |
+| 代理检测 | `PP_HC_INTERVAL`（默认 30s）| TCP 拨号 3128 + HTTP 经代理探测 | ✅ 自动巡检 |
+| 深度检测 | 5min | CONNECT HTTPS + 公网 IP 校验 | 规划中 |
 
-### 检查内容
+管理平台启动后自动运行 **HealthChecker 后台任务**，按 `PP_HC_INTERVAL` 周期扫描全部节点：
 
-1. **TCP**：`host:3128` 可建连
-2. **HTTP**：经代理访问 `http://example.com`
-3. **HTTPS**：经代理 CONNECT 建立 TLS
-4. **公网 IP**：经代理访问 `https://api.ipify.org` 校验出口 IP 正确
-5. **延迟**：记录 `connect_time / request_time / total_time`
+1. **TCP**：`socket.create_connection(ip:port, timeout)` 可建连（必做，记录拨号延迟）
+2. **HTTP**：经代理访问 `PP_HC_PROBE_URL`（默认 `http://example.com`，`PP_HC_HTTP_PROBE=0` 可关闭）
+
+### 状态机与防抖（v1.1 已实现）
+
+检查结果经 `record_check()` 应用状态机，**连续 N 次**判断避免抖动：
+
+```text
+连续失败 1~2 次 → 记录（保持 healthy）
+连续失败 3 次   → degraded（摘除，不再参与分配）   [PP_HC_FAIL_DEGRADED]
+连续失败 5 次   → dead                            [PP_HC_FAIL_DEAD]
+
+dead / degraded 连续成功 3 次 → healthy（重新入池）[PP_HC_RECOVER]
+
+maintenance / disabled → 跳过自动检查与迁移（人工状态）
+```
+
+- 状态字段：`status` / `consecutive_failures` / `consecutive_successes` / `latency`
+- 状态变迁写入指标 `proxy_pool_node_state_changes_total`（`transition` 标签）
+- 探活超时 `PP_HC_TIMEOUT`（默认 5s）
 
 ---
 
@@ -167,6 +182,8 @@ proxy_acquire_failed_total           分配失败
 ## 六、路线图
 
 - [x] Weighted Random（成功率/延迟加权）
+- [x] 健康检查增强（TCP/HTTP 探活 + 状态机防抖摘除/恢复）
+- [x] 管理 API 认证（API Key + IP 白名单）
 - [ ] Score Based Scheduler
 - [ ] Sticky Proxy + 降级策略
 - [ ] 区域池 / ISP 池 / 业务专属池

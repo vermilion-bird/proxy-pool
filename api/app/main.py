@@ -43,12 +43,29 @@ async def _pool_observer(interval: float = 15.0):
         _scan_pool()
 
 
+async def _health_check_loop():
+    """周期执行健康检查（TCP/HTTP 探活 + 状态机防抖）。"""
+    from .services.health_checker import HealthChecker
+
+    checker = HealthChecker()
+    while True:
+        try:
+            checker.run_once()
+        except Exception as exc:  # 单轮失败不影响下一轮
+            logger.warning("health check run failed: %s", exc)
+        await asyncio.sleep(checker.interval)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _scan_pool()
-    task = asyncio.create_task(_pool_observer())
+    tasks = [
+        asyncio.create_task(_pool_observer()),
+        asyncio.create_task(_health_check_loop()),
+    ]
     yield
-    task.cancel()
+    for task in tasks:
+        task.cancel()
 
 
 app = FastAPI(title="Proxy Pool Manager", version=__version__, lifespan=lifespan)

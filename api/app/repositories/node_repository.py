@@ -143,3 +143,59 @@ class NodeRepository:
             p.hincrby(k, "fail_count", 1)
         p.hset(k, "latency", latency)
         p.execute()
+
+    def record_check(
+        self,
+        node_id,
+        ok: bool,
+        latency_ms: float = 0.0,
+        fail_degraded: int = 3,
+        fail_dead: int = 5,
+        recover: int = 3,
+    ) -> dict:
+        """记录一次健康检查结果，应用状态机与防抖。
+
+        - 检查失败：consecutive_failures +1；达到 fail_degraded -> degraded，
+          达到 fail_dead -> dead（摘除，不再参与分配）
+        - 检查成功：重置失败计数，consecutive_successes +1；
+          degraded/dead 节点连续成功达到 recover -> healthy（重新入池）
+        - maintenance / disabled 状态不参与自动迁移
+        """
+        node = self.get(node_id)
+        status = node.get("status", "healthy")
+        if status in ("maintenance", "disabled"):
+            return node
+
+        failures = int(node.get("consecutive_failures") or 0)
+        successes = int(node.get("consecutive_successes") or 0)
+        new_status = status
+
+        if ok:
+            failures = 0
+            successes += 1
+            if status in ("degraded", "dead") and successes >= recover:
+                new_status = "healthy"
+        else:
+            successes = 0
+            failures += 1
+            if failures >= fail_dead:
+                new_status = "dead"
+            elif failures >= fail_degraded:
+                new_status = "degraded"
+
+        mapping = {
+            "status": new_status,
+            "consecutive_failures": str(failures),
+            "consecutive_successes": str(successes),
+            "latency": str(latency_ms),
+        }
+        if new_status != status:
+            mapping["last_state_change"] = "health_check"
+            try:
+                from .. import metrics
+
+                metrics.NODE_STATE_CHANGES.labels(transition=status + "->" + new_status).inc()
+            except Exception:
+                pass
+        self.r.hset(self._key(node_id), mapping=mapping)
+        return self.get(node_id)

@@ -13,6 +13,14 @@ services:
       # 管理 API 认证（生产必配；逗号分隔多个 Key / IP·CIDR）
       - PP_API_KEYS=${PP_API_KEYS:-}
       - PP_IP_WHITELIST=${PP_IP_WHITELIST:-}
+      # 健康检查（可选，默认 30s 间隔 / 3次摘除 / 5次dead / 3次恢复）
+      - PP_HC_INTERVAL=${PP_HC_INTERVAL:-30}
+      - PP_HC_TIMEOUT=${PP_HC_TIMEOUT:-5}
+      - PP_HC_FAIL_DEGRADED=${PP_HC_FAIL_DEGRADED:-3}
+      - PP_HC_FAIL_DEAD=${PP_HC_FAIL_DEAD:-5}
+      - PP_HC_RECOVER=${PP_HC_RECOVER:-3}
+      - PP_HC_HTTP_PROBE=${PP_HC_HTTP_PROBE:-1}
+      - PP_HC_PROBE_URL=${PP_HC_PROBE_URL:-http://example.com}
     depends_on:
       - redis
     networks:
