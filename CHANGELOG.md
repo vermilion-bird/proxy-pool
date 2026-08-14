@@ -9,6 +9,13 @@
 
 ### Added
 
+- **PostgreSQL 历史与审计**（v2.0.0）：
+  - 审计表：node_events（生命周期）/ acquire_logs（分配）/ report_logs（上报）
+  - 自动埋点：注册/删除/封禁/解封/状态变迁/分配/上报
+  - 查询 API：`GET /api/v1/audit/{events,acquires,reports}`（可按 node_id 过滤、limit）
+  - **尽力而为**设计：PG 不可用时静默降级，不影响代理池主流程
+  - docker-compose 增加 postgres:16 服务（`PG_ENABLED=1` 启用，可选）
+  - 单元测试：`api/tests/test_audit.py`（9 个用例，fake 连接）
 - **区域池 / ISP 池 / 业务专属池**（v1.2.0）：
   - 节点注册支持 `pool`（默认 default）与 `isp` 字段
   - `healthy_nodes` / `acquire` 支持 region + pool + isp 多维过滤（取交集）
@@ -93,7 +100,7 @@
 
 ### v2.0 — 平台化
 
-- [ ] **PostgreSQL 历史与审计**：节点生命周期、分配记录、质量趋势落库
+- [x] **PostgreSQL 历史与审计**：节点生命周期、分配记录、质量趋势落库 —— 已交付，见 [Unreleased]
 - [ ] **节点 Agent 增强**：自动注册、心跳上报、本地 3proxy 配置管理与指标采集
 - [ ] **多租户 / 代理套餐**：按租户配额、API Key 分级、套餐限速
 - [ ] **告警体系**：Prometheus Alertmanager + 飞书/钉钉通知

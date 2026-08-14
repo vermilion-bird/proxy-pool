@@ -262,6 +262,28 @@ Prometheus 可按此端点抓取（管理平台已内置 `prometheus:9090`）。
 
 ---
 
+## 审计历史（PostgreSQL，v2.0）
+
+管理 API 将节点生命周期 / 分配记录 / 使用上报写入 PostgreSQL（可选）。
+
+**启用**：`docker-compose.yml` 中置 `PG_ENABLED=1`（默认 0，未启用时审计静默降级不影响业务）。
+
+| 端点 | 说明 |
+|------|------|
+| `GET /api/v1/audit/events?node_id=&limit=` | 节点生命周期事件（注册/删除/封禁/解封/状态变迁）|
+| `GET /api/v1/audit/acquires?node_id=&limit=` | 代理分配历史 |
+| `GET /api/v1/audit/reports?node_id=&limit=` | 使用上报历史（success / latency_ms）|
+
+**示例：**
+
+```bash
+curl -H "X-API-Key: <KEY>" "http://<MGR>:8082/api/v1/audit/events?node_id=proxy-128.0.0.1&limit=10"
+```
+
+**响应：** `{"events": [{"id": 1, "node_id": "...", "event_type": "registered", ...}]}`
+
+---
+
 ## 错误码
 
 | 状态码 | 场景 |

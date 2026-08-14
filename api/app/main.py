@@ -61,6 +61,13 @@ async def _health_check_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 审计表结构（PG 启用时初始化，失败仅告警）
+    try:
+        from .repositories.audit_repository import AuditRepository
+
+        AuditRepository().init_schema()
+    except Exception as exc:
+        logger.warning("audit schema init skipped: %s", exc)
     _scan_pool()
     tasks = [
         asyncio.create_task(_pool_observer()),

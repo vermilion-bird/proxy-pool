@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from .. import metrics
 from ..core.security import require_api_key
+from ..repositories.audit_repository import AuditRepository
 from ..repositories.node_repository import NodeRepository, NodeNotFoundError, NoHealthyNodeError
 
 router = APIRouter(prefix="/api/v1", tags=["nodes"], dependencies=[Depends(require_api_key)])
@@ -42,6 +43,7 @@ def list_nodes(region: str | None = None, pool: str | None = None, isp: str | No
 def register_node(body: dict):
     metrics.REGISTER_TOTAL.inc()
     node = _repo().register(body)
+    AuditRepository().record_node_event(node["node_id"], "registered", new_status="healthy")
     metrics.NODE_STATE_CHANGES.labels(transition="registered").inc()
     _scan_and_refresh()
     return {"node_id": node["node_id"]}
@@ -68,6 +70,7 @@ def delete_node(node_id: str):
     r = _repo()
     r.r.delete(r._key(node_id))
     r.r.srem(r.pk, node_id)
+    AuditRepository().record_node_event(node_id, "deleted", old_status="removed")
     metrics.NODE_STATE_CHANGES.labels(transition="deleted").inc()
     _scan_and_refresh()
     return {"status": "deleted"}
@@ -81,6 +84,7 @@ def acquire(region: str | None = None, pool: str | None = None, isp: str | None 
             node, sticky = _repo().acquire_sticky(account_id, region=region, pool=pool, isp=isp)
         else:
             node, sticky = _repo().acquire(region, pool=pool, isp=isp), False
+        AuditRepository().record_acquire(node["node_id"], region=region, pool=node.get("pool"), isp=node.get("isp"), account_id=account_id)
     except NoHealthyNodeError:
         metrics.ACQUIRE_ERRORS.inc()
         raise HTTPException(503, "no healthy nodes available")
@@ -104,6 +108,7 @@ def report(body: dict):
     success = body.get("success", True)
     latency = float(body.get("latency", 0.0))
     _repo().report(node_id, success, latency)
+    AuditRepository().record_report(node_id, success, latency)
     metrics.REPORT_TOTAL.labels(result="success" if success else "failure").inc()
     metrics.REPORT_LATENCY.observe(latency)
     if not success:
@@ -128,3 +133,23 @@ def unban_node(node_id: str):
         raise HTTPException(404, f"node {node_id} not found")
     _scan_and_refresh()
     return {"node_id": node["node_id"], "status": node["status"]}
+
+# ---------- 审计历史查询（PostgreSQL） ----------
+
+
+@router.get("/audit/events")
+def audit_node_events(node_id: str | None = None, limit: int = 50):
+    """节点生命周期事件（注册/删除/封禁/解封/状态变迁）。"""
+    return {"events": AuditRepository().query_node_events(node_id=node_id, limit=min(limit, 500))}
+
+
+@router.get("/audit/acquires")
+def audit_acquires(node_id: str | None = None, limit: int = 50):
+    """代理分配历史。"""
+    return {"acquires": AuditRepository().query_acquires(node_id=node_id, limit=min(limit, 500))}
+
+
+@router.get("/audit/reports")
+def audit_reports(node_id: str | None = None, limit: int = 50):
+    """使用上报历史。"""
+    return {"reports": AuditRepository().query_reports(node_id=node_id, limit=min(limit, 500))}

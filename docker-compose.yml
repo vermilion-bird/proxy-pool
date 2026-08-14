@@ -25,9 +25,17 @@ services:
       - PP_HC_PROBE_URL=${PP_HC_PROBE_URL:-http://example.com}
       # 质量封禁（低成功率自动下线）
       - PP_QUALITY_MIN_SUCCESS_RATE=${PP_QUALITY_MIN_SUCCESS_RATE:-0.5}
+      # 审计历史（PostgreSQL，可选；置 PG_ENABLED=1 启用）
+      - PG_ENABLED=${PG_ENABLED:-0}
+      - PG_HOST=postgres
+      - PG_PORT=5432
+      - PG_DB=${PG_DB:-proxy_pool}
+      - PG_USER=${PG_USER:-proxy_pool}
+      - PG_PASSWORD=${PG_PASSWORD:-proxy_pool}
       - PP_QUALITY_MIN_REQUESTS=${PP_QUALITY_MIN_REQUESTS:-20}
     depends_on:
       - redis
+      - postgres
     networks:
       - pp-net
     healthcheck:
@@ -44,6 +52,22 @@ services:
     command: ["redis-server", "--port", "6380"]
     networks:
       - pp-net
+
+  postgres:
+    image: postgres:16
+    container_name: pp-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=proxy_pool
+      - POSTGRES_USER=proxy_pool
+      - POSTGRES_PASSWORD=${PG_PASSWORD:-proxy_pool}
+    volumes:
+      - pp-pgdata:/var/lib/postgresql/data
+    networks:
+      - pp-net
+
+volumes:
+  pp-pgdata:
 
   grafana:
     image: grafana/grafana:latest

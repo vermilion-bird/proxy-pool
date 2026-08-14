@@ -284,6 +284,15 @@ class NodeRepository:
                 metrics.NODE_STATE_CHANGES.labels(transition=status + "->" + new_status).inc()
             except Exception:
                 pass
+            try:
+                from .audit_repository import AuditRepository
+
+                AuditRepository().record_node_event(
+                    node_id, "state_change", old_status=status, new_status=new_status,
+                    detail="health_check",
+                )
+            except Exception:
+                pass
         self.r.hset(self._key(node_id), mapping=mapping)
         return self.get(node_id)
 
@@ -315,6 +324,12 @@ class NodeRepository:
             metrics.BANNED_TOTAL.labels(reason=reason).inc()
         except Exception:
             pass
+        try:
+            from .audit_repository import AuditRepository
+
+            AuditRepository().record_node_event(node_id, "banned", old_status="healthy", new_status="disabled", detail=reason)
+        except Exception:
+            pass
         return self.get(node_id)
 
     def unban(self, node_id):
@@ -331,6 +346,12 @@ class NodeRepository:
             from .. import metrics
 
             metrics.NODE_STATE_CHANGES.labels(transition="unbanned").inc()
+        except Exception:
+            pass
+        try:
+            from .audit_repository import AuditRepository
+
+            AuditRepository().record_node_event(node_id, "unbanned", old_status="disabled", new_status="healthy")
         except Exception:
             pass
         return self.get(node_id)

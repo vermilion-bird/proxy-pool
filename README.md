@@ -102,6 +102,7 @@ docker compose up -d --build
 |------|------|------|
 | FastAPI | 8082 | 代理管理 API |
 | Redis | 6380 | 实时状态（内网）|
+| PostgreSQL | 5432 | 审计历史（内网，可选）|
 | Prometheus | 9090 | 指标采集 |
 | Grafana | 3000 | 监控看板 (admin/admin) |
 
@@ -165,6 +166,7 @@ API 暴露 Prometheus 业务指标（`GET /metrics`），Grafana 看板（`Proxy
 | `proxy_pool_nodes_total` | Gauge | 已注册节点总数 |
 | `proxy_pool_nodes_healthy` | Gauge | 健康节点数 |
 | `proxy_pool_nodes_healthy_by_region` | Gauge | 各区域健康节点数（`region` 标签）|
+| `proxy_pool_nodes_healthy_by_pool` | Gauge | 各业务池健康节点数（`pool` 标签）|
 | `proxy_pool_acquire_total` | Counter | 代理分配次数（`region` 标签）|
 | `proxy_pool_acquire_errors_total` | Counter | 分配失败次数（无健康节点 → 503）|
 | `proxy_pool_report_total` | Counter | 使用结果上报次数（`result`: success/failure）|
@@ -192,7 +194,7 @@ Grafana 面板：池规模、按区域健康节点、请求 QPS、acquire 成功
 
 - **v1.1.x**：~~加权随机调度~~（✅ 已交付）/ ~~健康检查增强~~（✅ 已交付）/ ~~API Key 认证~~（✅ 已交付）
 - **v1.2.x**：~~Score Based Scheduler~~（✅ 已交付）/ ~~Sticky Proxy~~（✅ 已交付）/ ~~区域池·ISP 池~~（✅ 已交付）/ ~~质量评分与封禁~~（✅ 已交付）
-- **v2.0**：PostgreSQL 历史与审计 / 多租户套餐 / 告警体系 / Web 控制台 / 节点 Agent 增强
+- **v2.0**：~~PostgreSQL 历史与审计~~（✅ 已交付）/ 多租户套餐 / 告警体系 / Web 控制台 / 节点 Agent 增强
 
 ---
 
