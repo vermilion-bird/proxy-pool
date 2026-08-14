@@ -190,9 +190,9 @@ Grafana 面板：池规模、按区域健康节点、请求 QPS、acquire 成功
 
 **后续版本规划**（详见 [CHANGELOG.md](CHANGELOG.md)）
 
-- **v1.1.x**：~~加权随机调度~~（✅ 已交付）/ ~~健康检查增强~~（✅ 已交付）/ ~~API Key 认证~~（✅ 已交付）/ 节点 Agent 增强
+- **v1.1.x**：~~加权随机调度~~（✅ 已交付）/ ~~健康检查增强~~（✅ 已交付）/ ~~API Key 认证~~（✅ 已交付）
 - **v1.2.x**：Score Based Scheduler / Sticky Proxy / 区域池·ISP 池 / 质量评分与封禁
-- **v2.0**：PostgreSQL 历史与审计 / 多租户套餐 / 告警体系 / Web 控制台
+- **v2.0**：PostgreSQL 历史与审计 / 多租户套餐 / 告警体系 / Web 控制台 / 节点 Agent 增强
 
 ---
 
