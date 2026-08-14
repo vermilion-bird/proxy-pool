@@ -162,7 +162,7 @@ def test_score_prefers_low_load(repo):
 def test_score_defaults_to_full_when_no_stats(repo):
     repo_inst, r = repo
     _register(repo_inst, r, "proxy-fresh", success_count="0", fail_count="0", latency="0", current_connections="0")
-    assert repo_inst._score(repo_inst.get("proxy-fresh")) == 1.0
+    assert repo_inst._score(repo_inst.get("proxy-fresh")) == pytest.approx(1.0)
 
 
 # ---------- 加权随机统计验证 ----------
@@ -208,3 +208,52 @@ def test_report_updates_stats_and_affects_score(repo):
     repo_inst.report("proxy-x", success=False, latency=900.0)
     after = repo_inst._score(repo_inst.get("proxy-x"))
     assert after < before
+
+# ---------- 智能调度（Score Based / best 模式） ----------
+
+def test_best_mode_picks_highest_score(repo):
+    repo_inst, r = repo
+    _register(repo_inst, r, "proxy-good", success_count="100", fail_count="0", latency="10", current_connections="0")
+    _register(repo_inst, r, "proxy-bad", success_count="0", fail_count="100", latency="900", current_connections="9")
+    for _ in range(20):
+        node = repo_inst.acquire(mode="best")
+        assert node["node_id"] == "proxy-good"
+
+
+def test_best_mode_env_default(monkeypatch):
+    monkeypatch.setenv("PP_SCHED_MODE", "best")
+    r = FakeRedis()
+    repo_inst = NodeRepository(r=r)
+    _register(repo_inst, r, "proxy-good", success_count="100", fail_count="0", latency="10", current_connections="0")
+    _register(repo_inst, r, "proxy-bad", success_count="0", fail_count="100", latency="900", current_connections="9")
+    for _ in range(20):
+        assert repo_inst.acquire()["node_id"] == "proxy-good"
+
+
+def test_best_mode_respects_region(repo):
+    repo_inst, r = repo
+    _register(repo_inst, r, "proxy-us-best", region="US", success_count="100", fail_count="0", latency="10", current_connections="0")
+    _register(repo_inst, r, "proxy-jp-best", region="JP", success_count="100", fail_count="0", latency="10", current_connections="0")
+    for _ in range(20):
+        assert repo_inst.acquire(region="JP", mode="best")["node_id"] == "proxy-jp-best"
+
+
+def test_stability_raises_score(repo):
+    repo_inst, r = repo
+    _register(repo_inst, r, "proxy-stable")
+    _register(repo_inst, r, "proxy-fresh2")
+    r.hset("pp:node:proxy-stable", mapping={"consecutive_successes": "10"})
+    stable = repo_inst._score(repo_inst.get("proxy-stable"))
+    fresh = repo_inst._score(repo_inst.get("proxy-fresh2"))
+    # 无健康历史的新节点视为稳定满分，连续成功 10 次也达满分 -> 相等
+    assert stable == pytest.approx(fresh)
+    # 但 5 次成功 < 10 次成功
+    r.hset("pp:node:proxy-stable", mapping={"consecutive_successes": "5"})
+    less = repo_inst._score(repo_inst.get("proxy-stable"))
+    assert less < stable
+
+
+def test_best_mode_single_node(repo):
+    repo_inst, r = repo
+    _register(repo_inst, r, "proxy-only")
+    assert repo_inst.acquire(mode="best")["node_id"] == "proxy-only"

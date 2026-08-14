@@ -71,10 +71,13 @@ def delete_node(node_id: str):
 
 
 @router.get("/proxies/acquire")
-def acquire(region: str | None = None):
+def acquire(region: str | None = None, account_id: str | None = None):
     metrics.ACQUIRE_TOTAL.labels(region=region or "any").inc()
     try:
-        node = _repo().acquire(region)
+        if account_id:
+            node, sticky = _repo().acquire_sticky(account_id, region=region)
+        else:
+            node, sticky = _repo().acquire(region), False
     except NoHealthyNodeError:
         metrics.ACQUIRE_ERRORS.inc()
         raise HTTPException(503, "no healthy nodes available")
@@ -86,6 +89,7 @@ def acquire(region: str | None = None):
         "password": node["password"],
         "protocol": node["protocol"],
         "region": node["region"],
+        "sticky": sticky,
     }
 
 
@@ -100,3 +104,22 @@ def report(body: dict):
     if not success:
         metrics.NODE_STATE_CHANGES.labels(transition="failed").inc()
     return {"status": "ok"}
+
+
+@router.post("/proxies/release")
+def release_sticky(body: dict):
+    account_id = body.get("account_id")
+    if not account_id:
+        raise HTTPException(422, "account_id required")
+    _repo().release_sticky(account_id)
+    return {"status": "released"}
+
+
+@router.post("/nodes/{node_id}/unban")
+def unban_node(node_id: str):
+    try:
+        node = _repo().unban(node_id)
+    except NodeNotFoundError:
+        raise HTTPException(404, f"node {node_id} not found")
+    _scan_and_refresh()
+    return {"node_id": node["node_id"], "status": node["status"]}

@@ -8,6 +8,10 @@
   PP_HC_RECOVER        连续成功恢复 healthy 阈值（默认 3）
   PP_HC_HTTP_PROBE     是否启用 HTTP 深度探测（默认 1）
   PP_HC_PROBE_URL      HTTP 探测目标（默认 http://example.com）
+
+质量封禁（PP_QUALITY_*）：
+  PP_QUALITY_MIN_SUCCESS_RATE   成功率阈值（默认 0.5）
+  PP_QUALITY_MIN_REQUESTS       最小样本数（默认 20，防小样本误判）
 """
 
 import logging
@@ -49,6 +53,8 @@ class HealthChecker:
         self.recover = _env_int("PP_HC_RECOVER", 3)
         self.http_probe = os.getenv("PP_HC_HTTP_PROBE", "1") == "1"
         self.probe_url = os.getenv("PP_HC_PROBE_URL", "http://example.com")
+        self.min_success_rate = _env_float("PP_QUALITY_MIN_SUCCESS_RATE", 0.5)
+        self.min_requests = _env_int("PP_QUALITY_MIN_REQUESTS", 20)
 
     def check_node(self, node: dict) -> tuple:
         """探测单个节点，返回 (ok: bool, latency_ms: float)。
@@ -104,3 +110,10 @@ class HealthChecker:
                 fail_dead=self.fail_dead,
                 recover=self.recover,
             )
+        # 质量评分封禁：低成功率节点自动下线
+        banned = self.repo.evaluate_quality(
+            min_success_rate=self.min_success_rate,
+            min_requests=self.min_requests,
+        )
+        if banned:
+            logger.warning("quality ban: %s", banned)

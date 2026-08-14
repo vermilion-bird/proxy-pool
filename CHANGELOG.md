@@ -9,6 +9,20 @@
 
 ### Added
 
+- **Sticky Proxy**（v1.2.0）：账号级固定出口 IP
+  - `pp:sticky:{account_id}` 绑定 + TTL（默认 1800s，续期刷新）
+  - 绑定节点故障/区域不匹配自动切换备用节点（降级策略）
+  - API：`acquire?account_id=` + `POST /proxies/release`
+- **节点质量评分与自动封禁**（v1.2.0）：
+  - 质量评分基于成功率，低成功率节点自动 disabled（防抖：最小样本数）
+  - 健康检查循环内置质量评估（`PP_QUALITY_MIN_SUCCESS_RATE` / `PP_QUALITY_MIN_REQUESTS`）
+  - `POST /nodes/{id}/unban` 人工解封；封禁计数 `proxy_pool_node_banned_total`
+- **智能调度（Score Based Scheduler）**（v1.2.0）：
+  - `_score` 扩展为四维：成功率(0.35) + 延迟(0.30) + 负载(0.20) + 稳定性(0.15)
+  - 稳定性维度基于健康检查连续成功次数，新节点视为满分
+  - 双模式：`weighted` 加权随机（默认，兼容 v1.1）/ `best` 确定性选得分最高节点
+  - 模式经 `PP_SCHED_MODE` 配置或 `acquire(mode=...)` 参数覆盖
+  - 单元测试：`api/tests/test_scheduling.py` 新增 5 个用例（best 确定性、region、稳定性、env 默认）
 - **健康检查增强**（v1.1.0）：自动后台巡检 + 状态机防抖
   - HealthChecker 按 `PP_HC_INTERVAL`（默认 30s）周期扫描全部节点：TCP 拨号 + HTTP 经代理探测
   - 连续失败 3 次 → degraded 摘除，5 次 → dead（`PP_HC_FAIL_DEGRADED` / `PP_HC_FAIL_DEAD`）
@@ -65,10 +79,10 @@
 
 ### v1.2.x — 智能调度 + 区域池
 
-- [ ] **Score Based Scheduler**：成功率(0.35) + 延迟(0.30) + 负载(0.20) + 稳定性(0.15) 综合评分
-- [ ] **Sticky Proxy**：账号级固定出口 IP（Redis 粘性绑定 + TTL + 降级策略）
+- [x] **Score Based Scheduler**：成功率(0.35) + 延迟(0.30) + 负载(0.20) + 稳定性(0.15) 综合评分 —— 已交付，见 [Unreleased]
+- [x] **Sticky Proxy**：账号级固定出口 IP（Redis 粘性绑定 + TTL + 降级策略）—— 已交付，见 [Unreleased]
 - [ ] **区域池 / ISP 池 / 业务专属池**：按业务场景隔离节点资源
-- [ ] **节点质量评分与自动封禁**：低成功率/高延迟节点自动降权或下线
+- [x] **节点质量评分与自动封禁**：低成功率/高延迟节点自动降权或下线 —— 已交付，见 [Unreleased]
 
 ### v2.0 — 平台化
 

@@ -156,6 +156,9 @@ GET /api/v1/proxies/acquire?region=US
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | region | string | 可选，按地域筛选（US/JP/...）|
+| account_id | string | 可选，启用 Sticky Proxy（固定出口 IP）|
+
+**响应增加 `sticky` 字段**：`true` 表示命中既有绑定，`false` 表示新绑定/切换。
 
 **响应：**
 
@@ -173,7 +176,8 @@ GET /api/v1/proxies/acquire?region=US
 
 业务系统拿到后即可：`http://3proxy:<PASSWORD>@128.0.0.1:3128`
 
-> 分配策略：**健康节点过滤 → 加权随机**（成功率 0.5 + 延迟 0.3 + 负载 0.2，权重可经 `PP_SCHED_W_*` 调整），详见 [scheduling.md](scheduling.md)。
+> 分配策略：**健康节点过滤 → 智能评分**（成功率 0.35 + 延迟 0.30 + 负载 0.20 + 稳定性 0.15）。
+> 默认 `weighted` 加权随机；设 `PP_SCHED_MODE=best` 启用确定性选最优。详见 [scheduling.md](scheduling.md)。
 
 ### 使用结果上报
 
@@ -204,7 +208,27 @@ curl -X POST http://<MGR>:8082/api/v1/proxies/report \
 ```
 
 > 上报数据会累加到节点的 `success_count` / `fail_count` / `latency`，
-> 用于健康检查与后续的加权调度。
+> 用于健康检查、质量评分封禁与智能调度。
+
+### 释放粘性绑定
+
+```
+POST /api/v1/proxies/release
+```
+
+**请求体：** `{"account_id": "<ACCOUNT_ID>"}`
+
+**响应：** `{"status": "released"}`
+
+### 解封节点
+
+```
+POST /api/v1/nodes/{node_id}/unban
+```
+
+将被质量评分自动封禁（disabled）的节点人工恢复为 healthy。
+
+**响应：** `{"node_id": "...", "status": "healthy"}`
 
 ---
 

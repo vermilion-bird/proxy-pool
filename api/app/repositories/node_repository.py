@@ -13,12 +13,17 @@ class NoHealthyNodeError(Exception):
 
 
 class NodeRepository:
-    """节点仓库：注册/心跳/加权随机调度/上报。
+    """节点仓库：注册/心跳/智能调度/上报。
+
+    调度模式（PP_SCHED_MODE，默认 weighted）：
+      weighted  加权随机（按分数概率选择）
+      best      智能调度：选得分最高的节点（确定性）
 
     调度权重（可经环境变量覆盖）：
-      PP_SCHED_W_SUCCESS   成功率权重（默认 0.5）
-      PP_SCHED_W_LATENCY   延迟权重（默认 0.3）
-      PP_SCHED_W_LOAD      负载权重（默认 0.2）
+      PP_SCHED_W_SUCCESS     成功率权重（默认 0.35）
+      PP_SCHED_W_LATENCY     延迟权重（默认 0.30）
+      PP_SCHED_W_LOAD        负载权重（默认 0.20）
+      PP_SCHED_W_STABILITY   稳定性权重（默认 0.15）
     """
 
     def __init__(
@@ -29,26 +34,40 @@ class NodeRepository:
         w_success=None,
         w_latency=None,
         w_load=None,
+        w_stability=None,
+        sched_mode=None,
         latency_threshold_ms=1000.0,
         load_threshold=10.0,
+        stability_threshold=10.0,
     ):
         self.r = r or redis_module.get_client()
         self.nkp = node_key_prefix
         self.pk = pool_key
         self.w_success = (
-            float(os.getenv("PP_SCHED_W_SUCCESS", "0.5"))
+            float(os.getenv("PP_SCHED_W_SUCCESS", "0.35"))
             if w_success is None else float(w_success)
         )
         self.w_latency = (
-            float(os.getenv("PP_SCHED_W_LATENCY", "0.3"))
+            float(os.getenv("PP_SCHED_W_LATENCY", "0.30"))
             if w_latency is None else float(w_latency)
         )
         self.w_load = (
-            float(os.getenv("PP_SCHED_W_LOAD", "0.2"))
+            float(os.getenv("PP_SCHED_W_LOAD", "0.20"))
             if w_load is None else float(w_load)
         )
+        self.w_stability = (
+            float(os.getenv("PP_SCHED_W_STABILITY", "0.15"))
+            if w_stability is None else float(w_stability)
+        )
+        self.sched_mode = (
+            os.getenv("PP_SCHED_MODE", "weighted")
+            if sched_mode is None else sched_mode
+        ).lower()
+        if self.sched_mode not in ("weighted", "best"):
+            self.sched_mode = "weighted"
         self.latency_threshold_ms = latency_threshold_ms
         self.load_threshold = load_threshold
+        self.stability_threshold = stability_threshold
 
     def _key(self, node_id):
         return f"{self.nkp}:{node_id}"
@@ -91,7 +110,11 @@ class NodeRepository:
         return out
 
     def _score(self, node: dict) -> float:
-        """计算节点调度得分（0~1）：成功率 + 延迟 + 负载 加权。"""
+        """计算节点调度得分（0~1）：成功率 + 延迟 + 负载 + 稳定性 加权。
+
+        stability_score 基于健康检查连续成功次数（consecutive_successes），
+        连续成功越多代表在线越稳定；无健康历史的新节点视为满分（给予机会）。
+        """
         success = int(node.get("success_count") or 0)
         fail = int(node.get("fail_count") or 0)
         total = success + fail
@@ -103,26 +126,76 @@ class NodeRepository:
         connections = int(node.get("current_connections") or 0)
         load_score = max(0.0, 1.0 - connections / self.load_threshold)
 
+        if "consecutive_successes" in node:
+            successes = int(node.get("consecutive_successes") or 0)
+            stability_score = min(1.0, successes / self.stability_threshold)
+        else:
+            stability_score = 1.0  # 无健康历史的新节点视为稳定
+
         return (
             self.w_success * success_rate
             + self.w_latency * latency_score
             + self.w_load * load_score
+            + self.w_stability * stability_score
         )
 
-    def acquire(self, region=None):
-        """加权随机选择一个健康节点（成功率/延迟/负载）。
+    def acquire(self, region=None, mode=None):
+        """按调度模式选择一个健康节点。
 
-        权重越高的节点被选中的概率越大；所有节点得分一致或全为 0 时
-        退化为均匀随机（兼容无统计数据的新节点）。
+        mode（覆盖 PP_SCHED_MODE）：
+          best      智能调度：确定性选择得分最高的节点
+          weighted  加权随机：得分越高概率越大；分数一致或全 0 时
+                    退化为均匀随机（兼容无统计数据的新节点）
         """
         candidates = self.healthy_nodes(region)
         if not candidates:
             raise NoHealthyNodeError("no healthy nodes")
         nodes = [self.get(nid) for nid in candidates]
+        if len(nodes) == 1:
+            return nodes[0]
+
+        mode = (mode or self.sched_mode).lower()
+        if mode == "best":
+            return max(nodes, key=lambda n: self._score(n))
+
         weights = [max(0.0, self._score(n)) for n in nodes]
         if sum(weights) <= 0:
             return random.choice(nodes)
         return random.choices(nodes, weights=weights, k=1)[0]
+
+    # ---------- Sticky Proxy ----------
+
+    def sticky_key(self, account_id):
+        return f"pp:sticky:{account_id}"
+
+    def acquire_sticky(self, account_id, region=None, ttl=1800, mode=None):
+        """账号级固定出口 IP：优先复用已有绑定，故障时重新分配。
+
+        返回 (node, sticky_hit)。
+        - sticky_hit=True：命中既有绑定（绑定节点健康且区域匹配）
+        - sticky_hit=False：新建绑定（原绑定故障/无绑定）
+        """
+        sk = self.sticky_key(account_id)
+        bound = self.r.get(sk)
+        if bound:
+            try:
+                node = self.get(bound)
+                if node.get("status") == "healthy" and (
+                    not region or node.get("region") == region
+                ):
+                    self.r.expire(sk, ttl)  # 续期
+                    return node, True
+            except NodeNotFoundError:
+                pass
+            self.r.delete(sk)  # 绑定节点故障/区域不匹配，解除旧绑定
+
+        node = self.acquire(region, mode=mode)
+        self.r.set(sk, node["node_id"], ex=ttl)
+        return node, False
+
+    def release_sticky(self, account_id):
+        """释放账号的粘性绑定。"""
+        return self.r.delete(self.sticky_key(account_id))
 
     def get(self, node_id):
         d = self.r.hgetall(self._key(node_id))
@@ -199,3 +272,71 @@ class NodeRepository:
                 pass
         self.r.hset(self._key(node_id), mapping=mapping)
         return self.get(node_id)
+
+    # ---------- 质量评分封禁 ----------
+
+    def quality_score(self, node: dict) -> float:
+        """节点质量评分（0~1）：基于成功率，用于自动封禁判定。"""
+        success = int(node.get("success_count") or 0)
+        fail = int(node.get("fail_count") or 0)
+        total = success + fail
+        if total == 0:
+            return 1.0  # 无样本不判定
+        return success / total
+
+    def ban(self, node_id, reason="quality"):
+        """封禁节点：置为 disabled（不参与分配）。"""
+        import time
+
+        k = self._key(node_id)
+        self.r.hset(k, mapping={
+            "status": "disabled",
+            "banned_reason": reason,
+            "banned_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        })
+        try:
+            from .. import metrics
+
+            metrics.NODE_STATE_CHANGES.labels(transition="banned").inc()
+            metrics.BANNED_TOTAL.labels(reason=reason).inc()
+        except Exception:
+            pass
+        return self.get(node_id)
+
+    def unban(self, node_id):
+        """解封节点：恢复 healthy 并清空封禁信息与失败计数。"""
+        k = self._key(node_id)
+        self.r.hset(k, mapping={
+            "status": "healthy",
+            "banned_reason": "",
+            "banned_at": "",
+            "consecutive_failures": "0",
+            "consecutive_successes": "0",
+        })
+        try:
+            from .. import metrics
+
+            metrics.NODE_STATE_CHANGES.labels(transition="unbanned").inc()
+        except Exception:
+            pass
+        return self.get(node_id)
+
+    def evaluate_quality(self, min_success_rate=0.5, min_requests=20):
+        """扫描全部节点，低成功率节点自动封禁（防抖：需达到最小请求数）。
+
+        返回被封禁的 node_id 列表。
+        """
+        banned = []
+        for node in self.all_nodes():
+            status = node.get("status", "healthy")
+            if status in ("maintenance", "disabled"):
+                continue  # 人工状态/已封禁不重复评估
+            success = int(node.get("success_count") or 0)
+            fail = int(node.get("fail_count") or 0)
+            total = success + fail
+            if total < min_requests:
+                continue  # 样本不足，避免小样本误判
+            if self.quality_score(node) < min_success_rate:
+                self.ban(node["node_id"], reason="low_success_rate")
+                banned.append(node["node_id"])
+        return banned

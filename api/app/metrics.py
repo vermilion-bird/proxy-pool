@@ -57,6 +57,11 @@ NODE_STATE_CHANGES = Counter(
     "Node state transitions (register / health lost).",
     ["transition"],
 )
+BANNED_TOTAL = Counter(
+    "proxy_pool_node_banned_total",
+    "Nodes auto-banned by quality evaluation.",
+    ["reason"],
+)
 
 
 _seen_regions = set()
