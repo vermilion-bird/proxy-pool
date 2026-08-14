@@ -173,7 +173,7 @@ GET /api/v1/proxies/acquire?region=US
 
 业务系统拿到后即可：`http://3proxy:<PASSWORD>@128.0.0.1:3128`
 
-> ⚠️ 分配基于**健康节点 + 随机**；后续将升级为「健康 → 负载 → 成功率 → 延迟 → 加权随机」评分调度，见 [scheduling.md](scheduling.md)。
+> 分配策略：**健康节点过滤 → 加权随机**（成功率 0.5 + 延迟 0.3 + 负载 0.2，权重可经 `PP_SCHED_W_*` 调整），详见 [scheduling.md](scheduling.md)。
 
 ### 使用结果上报
 

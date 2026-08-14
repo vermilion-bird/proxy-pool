@@ -6,13 +6,16 @@
 
 ## 一、代理分配调度
 
-### 当前（MVP）：Random + Health Filter
+### 当前（v1.1）：Weighted Random + Health Filter
 
 ```
 健康节点集合（region 可选）
         │
         ▼
-   加权随机选择一个
+   计算每个节点权重 score
+        │
+        ▼
+   按权重随机选择一个（random.choices）
         │
         ▼
    返回该节点
@@ -21,8 +24,22 @@
 实现要点：
 
 1. **过滤**：只从 `healthy` 节点中选（Redis 实时状态）。
-2. **地域**：`region` 参数命中 `proxy:nodes:region:<CODE>`。
-3. **随机**：当前版本随机，保证负载基本均衡。
+2. **地域**：`region` 参数过滤节点区域。
+3. **加权随机**：按 成功率 / 延迟 / 负载 三项加权计算得分，得分越高被选中概率越大；
+   分数一致或全为 0 时退化为均匀随机（兼容无统计数据的新节点）。
+
+权重公式（`NodeRepository._score`）：
+
+```python
+score = (
+    0.5 * success_rate      # 成功率：成功数 / (成功+失败)，无数据视为 1.0
+  + 0.3 * latency_score     # 延迟：1 - latency/1000ms（越低越高，1000ms 封顶为 0）
+  + 0.2 * load_score        # 负载：1 - connections/10（越少越高，10 连接封顶为 0）
+)
+```
+
+权重系数可通过环境变量调整：`PP_SCHED_W_SUCCESS` / `PP_SCHED_W_LATENCY` / `PP_SCHED_W_LOAD`
+（默认 0.5 / 0.3 / 0.2），归一化阈值 `latency_threshold_ms`（默认 1000）与 `load_threshold`（默认 10）。
 
 ### 演进：Score Based Scheduler
 
@@ -149,7 +166,7 @@ proxy_acquire_failed_total           分配失败
 
 ## 六、路线图
 
-- [ ] Weighted Random（成功率/延迟加权）
+- [x] Weighted Random（成功率/延迟加权）
 - [ ] Score Based Scheduler
 - [ ] Sticky Proxy + 降级策略
 - [ ] 区域池 / ISP 池 / 业务专属池

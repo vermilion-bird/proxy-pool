@@ -1,3 +1,4 @@
+import os
 import random
 
 from ..core import redis as redis_module
@@ -12,10 +13,42 @@ class NoHealthyNodeError(Exception):
 
 
 class NodeRepository:
-    def __init__(self, r=None, node_key_prefix="pp:node", pool_key="pp:pool"):
+    """节点仓库：注册/心跳/加权随机调度/上报。
+
+    调度权重（可经环境变量覆盖）：
+      PP_SCHED_W_SUCCESS   成功率权重（默认 0.5）
+      PP_SCHED_W_LATENCY   延迟权重（默认 0.3）
+      PP_SCHED_W_LOAD      负载权重（默认 0.2）
+    """
+
+    def __init__(
+        self,
+        r=None,
+        node_key_prefix="pp:node",
+        pool_key="pp:pool",
+        w_success=None,
+        w_latency=None,
+        w_load=None,
+        latency_threshold_ms=1000.0,
+        load_threshold=10.0,
+    ):
         self.r = r or redis_module.get_client()
         self.nkp = node_key_prefix
         self.pk = pool_key
+        self.w_success = (
+            float(os.getenv("PP_SCHED_W_SUCCESS", "0.5"))
+            if w_success is None else float(w_success)
+        )
+        self.w_latency = (
+            float(os.getenv("PP_SCHED_W_LATENCY", "0.3"))
+            if w_latency is None else float(w_latency)
+        )
+        self.w_load = (
+            float(os.getenv("PP_SCHED_W_LOAD", "0.2"))
+            if w_load is None else float(w_load)
+        )
+        self.latency_threshold_ms = latency_threshold_ms
+        self.load_threshold = load_threshold
 
     def _key(self, node_id):
         return f"{self.nkp}:{node_id}"
@@ -57,11 +90,39 @@ class NodeRepository:
             out = [nid for nid in out if self.r.hget(self._key(nid), "region") == region]
         return out
 
+    def _score(self, node: dict) -> float:
+        """计算节点调度得分（0~1）：成功率 + 延迟 + 负载 加权。"""
+        success = int(node.get("success_count") or 0)
+        fail = int(node.get("fail_count") or 0)
+        total = success + fail
+        success_rate = (success / total) if total else 1.0  # 无统计数据视为满分
+
+        latency = float(node.get("latency") or 0)
+        latency_score = max(0.0, 1.0 - latency / self.latency_threshold_ms)
+
+        connections = int(node.get("current_connections") or 0)
+        load_score = max(0.0, 1.0 - connections / self.load_threshold)
+
+        return (
+            self.w_success * success_rate
+            + self.w_latency * latency_score
+            + self.w_load * load_score
+        )
+
     def acquire(self, region=None):
+        """加权随机选择一个健康节点（成功率/延迟/负载）。
+
+        权重越高的节点被选中的概率越大；所有节点得分一致或全为 0 时
+        退化为均匀随机（兼容无统计数据的新节点）。
+        """
         candidates = self.healthy_nodes(region)
         if not candidates:
             raise NoHealthyNodeError("no healthy nodes")
-        return self.get(random.choice(candidates))
+        nodes = [self.get(nid) for nid in candidates]
+        weights = [max(0.0, self._score(n)) for n in nodes]
+        if sum(weights) <= 0:
+            return random.choice(nodes)
+        return random.choices(nodes, weights=weights, k=1)[0]
 
     def get(self, node_id):
         d = self.r.hgetall(self._key(node_id))
