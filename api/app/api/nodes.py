@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from .. import metrics
+from ..core.security import require_api_key
 from ..repositories.node_repository import NodeRepository, NodeNotFoundError, NoHealthyNodeError
 
-router = APIRouter(prefix="/api/v1", tags=["nodes"])
+router = APIRouter(prefix="/api/v1", tags=["nodes"], dependencies=[Depends(require_api_key)])
 
 
 def _repo():

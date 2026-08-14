@@ -11,6 +11,7 @@
   通过环境变量配置（含凭据，勿入库）：
     PP_SSH_KEY=/path/to/id_rsa
     PP_MGR_API=http://<MANAGER_IP>:8082
+    PP_API_KEY=<API_KEY>            # 管理 API 认证 Key（可选，未配置时跳过）
     PP_NODES="IP1:US:ID1 IP2:JP:ID2 ..."   # 空格分隔的 节点=IP:区域:节点ID
   python3 scripts/setup_pool.py
 """
@@ -23,6 +24,7 @@ NODES   = os.environ.get('PP_NODES', '').strip()
 
 # 每项格式: IP:REGION:NODE_ID ，空格分隔
 SSH_USER = os.environ.get('PP_SSH_USER', 'ubuntu')
+API_KEY = os.environ.get('PP_API_KEY', '')  # 管理 API 认证（可选）
 CFG_PATH = os.environ.get('PP_CFG_PATH', '/opt/pp3/3proxy.cfg')
 CFG_LINE = os.environ.get('PP_CFG_LINE', '^users 3proxy:CL:')
 
@@ -56,9 +58,12 @@ def ssh_read(ip, pattern):
 
 
 def api_post(path, payload):
+    headers = {'Content-Type': 'application/json'}
+    if API_KEY:
+        headers['X-API-Key'] = API_KEY
     req = urllib.request.Request(
         f'{API}{path}', data=json.dumps(payload).encode(),
-        headers={'Content-Type': 'application/json'}, method='POST')
+        headers=headers, method='POST')
     with urllib.request.urlopen(req, timeout=10) as resp:
         return json.loads(resp.read().decode())
 

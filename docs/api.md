@@ -5,6 +5,41 @@
 
 ---
 
+## 认证
+
+管理 API（`/api/v1/*`）通过 **API Key + IP 白名单** 双重防护（v1.1.0+）。
+
+### 配置（环境变量）
+
+| 变量 | 必填 | 说明 |
+|------|:---:|------|
+| `PP_API_KEYS` | 生产必配 | 逗号分隔的 API Key 列表，配置后所有 `/api/v1/*` 请求必须携带有效 Key |
+| `PP_IP_WHITELIST` | 可选 | 逗号分隔的 IP / CIDR 白名单，配置后仅白名单来源可访问 |
+| `PP_TRUST_PROXY` | 可选 | 部署于反向代理后置 `1`，此时来源 IP 取 `X-Forwarded-For` 首个地址 |
+
+> 未配置 `PP_API_KEYS` 时认证关闭（向后兼容），但**生产环境必须配置**。
+
+### 认证方式（二选一）
+
+```bash
+# 方式一：X-API-Key 请求头
+curl -H "X-API-Key: <KEY>" http://<MGR>:8082/api/v1/nodes
+
+# 方式二：Authorization: Bearer
+curl -H "Authorization: Bearer <KEY>" http://<MGR>:8082/api/v1/nodes
+```
+
+### 错误响应
+
+| 状态码 | 场景 |
+|:---:|------|
+| 401 | 缺少 / 无效 API Key |
+| 403 | 来源 IP 不在白名单 |
+
+> `/health`、`/version`、`/metrics` 为公开端点，**不受认证保护**（Prometheus 抓取需要）。
+
+---
+
 ## 节点管理
 
 ### 注册节点

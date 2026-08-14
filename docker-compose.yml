@@ -10,6 +10,9 @@ services:
       - REDIS_PORT=6380
       - REDIS_DB=0
       - POOL_PREFIX=proxy-pool
+      # 管理 API 认证（生产必配；逗号分隔多个 Key / IP·CIDR）
+      - PP_API_KEYS=${PP_API_KEYS:-}
+      - PP_IP_WHITELIST=${PP_IP_WHITELIST:-}
     depends_on:
       - redis
     networks:
