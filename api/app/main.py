@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 
+from . import __version__
 from .api import nodes
 from .core import redis as redis_module
 
@@ -50,7 +51,7 @@ async def lifespan(app: FastAPI):
     task.cancel()
 
 
-app = FastAPI(title="Proxy Pool Manager", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Proxy Pool Manager", version=__version__, lifespan=lifespan)
 app.include_router(nodes.router)
 
 
@@ -63,7 +64,12 @@ async def count_requests(request: Request, call_next):
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": __version__}
+
+
+@app.get("/version")
+def version():
+    return {"name": "proxy-pool", "version": __version__}
 
 
 @app.get("/metrics")

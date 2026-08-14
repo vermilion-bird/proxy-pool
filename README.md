@@ -59,6 +59,8 @@
 ```text
 proxy-pool/
 ├── README.md              # 本文件
+├── CHANGELOG.md           # 变更记录（Keep a Changelog）
+├── VERSION                # 当前版本号（单一事实来源）
 ├── docs/
 │   ├── api.md             # 管理 API 参考
 │   ├── deployment.md      # 部署指南
@@ -75,6 +77,12 @@ proxy-pool/
 
 ---
 
+## 🏷 版本
+
+当前版本 **v1.0.0**（见 [VERSION](VERSION)），完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+
+---
+
 ## 🔌 快速开始
 
 ### 1. 启动管理平台（控制面）
@@ -83,6 +91,8 @@ proxy-pool/
 # 在管控服务器（如 158.180.87.150）上
 git clone https://github.com/vermilion-bird/proxy-pool.git
 cd proxy-pool
+# 配置管理 API 认证（生产必配）：
+#   cp .env.example .env && 编辑 PP_API_KEYS / PP_IP_WHITELIST
 docker compose up -d --build
 ```
 
@@ -170,21 +180,25 @@ Grafana 面板：池规模、按区域健康节点、请求 QPS、acquire 成功
 
 ## 🗺 路线图
 
+**已交付（v1.0.0）**
+
 - [x] 基础代理能力（5 节点 3proxy）— HTTP/SOCKS5 + 认证
 - [x] Proxy Manager（FastAPI + Redis）— 注册/心跳/分配/上报
 - [x] 健康检查 + 故障摘除/恢复闭环
 - [x] 监控（Prometheus + Grafana）
 - [x] 强密码轮换 + 防火墙加固
-- [ ] 加权调度 / 粘性 Proxy
-- [ ] PostgreSQL 历史与审计
-- [ ] 管理 API 认证（API Key）
-- [ ] 节点 Agent 增强
+
+**后续版本规划**（详见 [CHANGELOG.md](CHANGELOG.md)）
+
+- **v1.1.x**：加权随机调度 / 健康检查增强 / ~~API Key 认证~~（✅ 已交付）/ 节点 Agent 增强
+- **v1.2.x**：Score Based Scheduler / Sticky Proxy / 区域池·ISP 池 / 质量评分与封禁
+- **v2.0**：PostgreSQL 历史与审计 / 多租户套餐 / 告警体系 / Web 控制台
 
 ---
 
 ## 🔒 安全说明
 
 - 3proxy 使用**用户名 + 随机强密码**认证，禁止裸跑公网
-- 管理 API 建议后续叠加 **API Key + IP 白名单**
+- 管理 API 已支持 **API Key + IP 白名单**（v1.1.0+，生产环境必须配置 `PP_API_KEYS`，详见 [docs/api.md](docs/api.md)）
 - 真实凭据**不入库**（见 [CREDENTIALS.example.md](CREDENTIALS.example.md)）
 - 云平台安全组 + 主机 iptables **白名单**双重加固
