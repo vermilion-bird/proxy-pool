@@ -56,6 +56,8 @@ POST /api/v1/nodes/register
 | ip | string | ✅ | 代理公网 IP |
 | port | int | ✅ | HTTP 代理端口（默认 3128）|
 | region | string | | 地域代码（US/JP/...），默认 US |
+| pool | string | | 业务专属池（ads / data-pipeline / ...），默认 default |
+| isp | string | | ISP 提供商（OCI / AWS / ...），默认空 |
 | protocol | string | | http / socks5，默认 http |
 | username | string | | 认证用户名 |
 | password | string | | 认证密码 |
@@ -85,7 +87,7 @@ curl -X POST http://<MGR>:8082/api/v1/nodes/register \
 ### 节点列表
 
 ```
-GET /api/v1/nodes?region=US
+GET /api/v1/nodes?region=US&pool=ads&isp=OCI
 ```
 
 **响应：**
@@ -156,6 +158,8 @@ GET /api/v1/proxies/acquire?region=US
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | region | string | 可选，按地域筛选（US/JP/...）|
+| pool | string | 可选，业务专属池（ads / data-pipeline / ...）|
+| isp | string | 可选，ISP 提供商（OCI / AWS / ...）|
 | account_id | string | 可选，启用 Sticky Proxy（固定出口 IP）|
 
 **响应增加 `sticky` 字段**：`true` 表示命中既有绑定，`false` 表示新绑定/切换。
@@ -170,7 +174,9 @@ GET /api/v1/proxies/acquire?region=US
   "username": "3proxy",
   "password": "<PASSWORD>",
   "protocol": "http",
-  "region": "US"
+  "region": "US",
+  "pool": "default",
+  "isp": "OCI"
 }
 ```
 

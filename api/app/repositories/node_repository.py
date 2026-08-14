@@ -85,6 +85,8 @@ class NodeRepository:
             "ip": str(node_data.get("ip", "")),
             "port": str(node_data.get("port", 3128)),
             "region": str(node_data.get("region", "US")),
+            "pool": str(node_data.get("pool", "default")),
+            "isp": str(node_data.get("isp", "")),
             "protocol": str(node_data.get("protocol", "http")),
             "username": str(node_data.get("username", "")),
             "password": str(node_data.get("password", "")),
@@ -102,11 +104,18 @@ class NodeRepository:
             "status": status,
         })
 
-    def healthy_nodes(self, region=None):
+    def healthy_nodes(self, region=None, pool=None, isp=None):
+        """健康节点列表，支持 region / pool（业务专属池）/ isp 多维过滤。"""
         ids = self.r.smembers(self.pk)
         out = [nid for nid in ids if self._is_healthy(nid)]
-        if region:
-            out = [nid for nid in out if self.r.hget(self._key(nid), "region") == region]
+        for nid in list(out):
+            d = self.r.hgetall(self._key(nid))
+            if region and d.get("region") != region:
+                out.remove(nid)
+            elif pool and d.get("pool") != pool:
+                out.remove(nid)
+            elif isp and d.get("isp") != isp:
+                out.remove(nid)
         return out
 
     def _score(self, node: dict) -> float:
@@ -139,15 +148,16 @@ class NodeRepository:
             + self.w_stability * stability_score
         )
 
-    def acquire(self, region=None, mode=None):
-        """按调度模式选择一个健康节点。
+    def acquire(self, region=None, pool=None, isp=None, mode=None):
+        """按调度模式从匹配多维过滤条件的健康节点中选择一个。
 
+        region / pool（业务专属池）/ isp 任一维度都可过滤。
         mode（覆盖 PP_SCHED_MODE）：
           best      智能调度：确定性选择得分最高的节点
           weighted  加权随机：得分越高概率越大；分数一致或全 0 时
                     退化为均匀随机（兼容无统计数据的新节点）
         """
-        candidates = self.healthy_nodes(region)
+        candidates = self.healthy_nodes(region, pool=pool, isp=isp)
         if not candidates:
             raise NoHealthyNodeError("no healthy nodes")
         nodes = [self.get(nid) for nid in candidates]
@@ -168,7 +178,7 @@ class NodeRepository:
     def sticky_key(self, account_id):
         return f"pp:sticky:{account_id}"
 
-    def acquire_sticky(self, account_id, region=None, ttl=1800, mode=None):
+    def acquire_sticky(self, account_id, region=None, pool=None, isp=None, ttl=1800, mode=None):
         """账号级固定出口 IP：优先复用已有绑定，故障时重新分配。
 
         返回 (node, sticky_hit)。
@@ -182,6 +192,10 @@ class NodeRepository:
                 node = self.get(bound)
                 if node.get("status") == "healthy" and (
                     not region or node.get("region") == region
+                ) and (
+                    not pool or node.get("pool") == pool
+                ) and (
+                    not isp or node.get("isp") == isp
                 ):
                     self.r.expire(sk, ttl)  # 续期
                     return node, True
@@ -189,7 +203,7 @@ class NodeRepository:
                 pass
             self.r.delete(sk)  # 绑定节点故障/区域不匹配，解除旧绑定
 
-        node = self.acquire(region, mode=mode)
+        node = self.acquire(region, pool=pool, isp=isp, mode=mode)
         self.r.set(sk, node["node_id"], ex=ttl)
         return node, False
 

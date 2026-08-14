@@ -18,19 +18,22 @@ def _scan_and_refresh():
         nodes_all = repo.all_nodes()
         healthy = [n for n in nodes_all if n.get("status") == "healthy"]
         by_region: dict = {}
+        by_pool: dict = {}
         for n in healthy:
             r = n.get("region", "US")
             by_region[r] = by_region.get(r, 0) + 1
-        metrics.observe_pool(len(nodes_all), len(healthy), by_region)
+            p = n.get("pool", "default")
+            by_pool[p] = by_pool.get(p, 0) + 1
+        metrics.observe_pool(len(nodes_all), len(healthy), by_region, by_pool)
     except Exception:
         # 采集失败不影响业务返回
         pass
 
 
 @router.get("/nodes")
-def list_nodes(region: str | None = None):
+def list_nodes(region: str | None = None, pool: str | None = None, isp: str | None = None):
     try:
-        return {"nodes": _repo().healthy_nodes(region)}
+        return {"nodes": _repo().healthy_nodes(region, pool=pool, isp=isp)}
     except NoHealthyNodeError:
         return {"nodes": []}
 
@@ -71,13 +74,13 @@ def delete_node(node_id: str):
 
 
 @router.get("/proxies/acquire")
-def acquire(region: str | None = None, account_id: str | None = None):
+def acquire(region: str | None = None, pool: str | None = None, isp: str | None = None, account_id: str | None = None):
     metrics.ACQUIRE_TOTAL.labels(region=region or "any").inc()
     try:
         if account_id:
-            node, sticky = _repo().acquire_sticky(account_id, region=region)
+            node, sticky = _repo().acquire_sticky(account_id, region=region, pool=pool, isp=isp)
         else:
-            node, sticky = _repo().acquire(region), False
+            node, sticky = _repo().acquire(region, pool=pool, isp=isp), False
     except NoHealthyNodeError:
         metrics.ACQUIRE_ERRORS.inc()
         raise HTTPException(503, "no healthy nodes available")
@@ -89,6 +92,8 @@ def acquire(region: str | None = None, account_id: str | None = None):
         "password": node["password"],
         "protocol": node["protocol"],
         "region": node["region"],
+        "pool": node.get("pool", "default"),
+        "isp": node.get("isp", ""),
         "sticky": sticky,
     }
 

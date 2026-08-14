@@ -29,10 +29,13 @@ def _scan_pool():
         nodes_all = repo.all_nodes()
         healthy = [n for n in nodes_all if n.get("status") == "healthy"]
         by_region: dict = {}
+        by_pool: dict = {}
         for n in healthy:
             r = n.get("region", "US")
             by_region[r] = by_region.get(r, 0) + 1
-        metrics.observe_pool(len(nodes_all), len(healthy), by_region)
+            p = n.get("pool", "default")
+            by_pool[p] = by_pool.get(p, 0) + 1
+        metrics.observe_pool(len(nodes_all), len(healthy), by_region, by_pool)
     except Exception as exc:  # 采集失败不影响 API
         logger.warning("pool scan failed: %s", exc)
 

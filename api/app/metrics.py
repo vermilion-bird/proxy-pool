@@ -16,6 +16,11 @@ NODES_BY_REGION = Gauge(
     "Healthy proxy nodes per region.",
     ["region"],
 )
+NODES_BY_POOL = Gauge(
+    "proxy_pool_nodes_healthy_by_pool",
+    "Healthy proxy nodes per business pool.",
+    ["pool"],
+)
 
 # acquire 分配
 ACQUIRE_TOTAL = Counter(
@@ -65,9 +70,10 @@ BANNED_TOTAL = Counter(
 
 
 _seen_regions = set()
+_seen_pools = set()
 
 
-def observe_pool(nodes_total: int, healthy: int, healthy_by_region: dict):
+def observe_pool(nodes_total: int, healthy: int, healthy_by_region: dict, healthy_by_pool: dict | None = None):
     """Refresh pool-size gauges from a registry scan."""
     NODES_TOTAL.set(nodes_total)
     NODES_HEALTHY.set(healthy)
@@ -77,3 +83,10 @@ def observe_pool(nodes_total: int, healthy: int, healthy_by_region: dict):
     _seen_regions.update(healthy_by_region)
     for region, count in healthy_by_region.items():
         NODES_BY_REGION.labels(region=region).set(count)
+    # 业务池维度
+    healthy_by_pool = healthy_by_pool or {}
+    for pool in _seen_pools - set(healthy_by_pool):
+        NODES_BY_POOL.remove(pool)
+    _seen_pools.update(healthy_by_pool)
+    for pool, count in healthy_by_pool.items():
+        NODES_BY_POOL.labels(pool=pool).set(count)

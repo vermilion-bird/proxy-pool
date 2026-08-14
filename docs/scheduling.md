@@ -74,6 +74,35 @@ account_id = 123456  ──►  proxy-03  ──►  proxy-03  ──►  proxy-
 
 ---
 
+## 一·四、区域池 / ISP 池 / 业务专属池（v1.2）
+
+按业务场景隔离节点资源，节点注册时声明归属：
+
+| 字段 | 说明 | 默认 |
+|------|------|------|
+| `region` | 地域（US/JP/...）| US |
+| `pool` | 业务专属池（ads / data-pipeline / ...）| default |
+| `isp` | ISP 提供商（OCI / AWS / ...）| 空 |
+
+**多维过滤**（`healthy_nodes` / `acquire` 同时支持，取交集）：
+
+```bash
+# 只从 ads 池分配（业务隔离）
+GET /api/v1/proxies/acquire?pool=ads
+
+# 组合：US 区域 + ads 池 + OCI ISP
+GET /api/v1/proxies/acquire?region=US&pool=ads&isp=OCI
+
+# 查看某池健康节点
+GET /api/v1/nodes?pool=ads
+```
+
+- 无匹配节点返回 503（与 region 过滤行为一致）
+- Sticky Proxy 同时支持 pool/isp 维度（绑定节点需满足全部条件）
+- 指标：`proxy_pool_nodes_healthy_by_pool`（按业务池的健康节点数）
+
+---
+
 ## 一·五、节点质量评分与自动封禁（v1.2）
 
 健康检查循环内置质量评估，低成功率节点自动封禁：
@@ -203,6 +232,6 @@ proxy_acquire_failed_total           分配失败
 - [x] 管理 API 认证（API Key + IP 白名单）
 - [x] Score Based Scheduler
 - [x] Sticky Proxy + 降级策略
-- [ ] 区域池 / ISP 池 / 业务专属池
+- [x] 区域池 / ISP 池 / 业务专属池
 - [x] 自动封禁节点 / 节点质量评分
 - [ ] 多租户 / API Key / 代理套餐

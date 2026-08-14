@@ -9,6 +9,13 @@
 
 ### Added
 
+- **区域池 / ISP 池 / 业务专属池**（v1.2.0）：
+  - 节点注册支持 `pool`（默认 default）与 `isp` 字段
+  - `healthy_nodes` / `acquire` 支持 region + pool + isp 多维过滤（取交集）
+  - API：`acquire` / `nodes` 支持 `pool`、`isp` 参数；响应含 `pool` / `isp` 字段
+  - Sticky Proxy 同步支持 pool/isp 维度
+  - 指标：`proxy_pool_nodes_healthy_by_pool`
+  - 单元测试：`api/tests/test_pools.py`（10 个用例）
 - **Sticky Proxy**（v1.2.0）：账号级固定出口 IP
   - `pp:sticky:{account_id}` 绑定 + TTL（默认 1800s，续期刷新）
   - 绑定节点故障/区域不匹配自动切换备用节点（降级策略）
@@ -81,7 +88,7 @@
 
 - [x] **Score Based Scheduler**：成功率(0.35) + 延迟(0.30) + 负载(0.20) + 稳定性(0.15) 综合评分 —— 已交付，见 [Unreleased]
 - [x] **Sticky Proxy**：账号级固定出口 IP（Redis 粘性绑定 + TTL + 降级策略）—— 已交付，见 [Unreleased]
-- [ ] **区域池 / ISP 池 / 业务专属池**：按业务场景隔离节点资源
+- [x] **区域池 / ISP 池 / 业务专属池**：按业务场景隔离节点资源 —— 已交付，见 [Unreleased]
 - [x] **节点质量评分与自动封禁**：低成功率/高延迟节点自动降权或下线 —— 已交付，见 [Unreleased]
 
 ### v2.0 — 平台化

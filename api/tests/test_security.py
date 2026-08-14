@@ -15,7 +15,7 @@ class FakeRepo:
     def all_nodes(self):
         return []
 
-    def healthy_nodes(self, region=None):
+    def healthy_nodes(self, region=None, pool=None, isp=None):
         return []
 
 
