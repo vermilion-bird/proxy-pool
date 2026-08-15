@@ -1,8 +1,10 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import FileResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 
 from . import __version__
@@ -11,19 +13,22 @@ from .core import redis as redis_module
 
 logger = logging.getLogger("proxy-pool")
 
-# HTTP 请求指标（按 方法/路径 计数）
 HTTP_REQUESTS = Counter(
     "proxy_pool_http_requests_total",
     "HTTP requests received by the proxy-pool API.",
     ["method", "path"],
 )
 
+# Web UI static directory: env var (Docker) or relative path (local dev)
+_WEB_DIR = os.environ.get(
+    "WEB_DIR",
+    os.path.join(os.path.dirname(__file__), "..", "..", "web", "dist"),
+)
+
 
 def _scan_pool():
-    """从 Redis 扫描节点池，刷新池规模 Gauge。"""
     from . import metrics
     from .repositories.node_repository import NodeRepository
-
     try:
         repo = NodeRepository()
         nodes_all = repo.all_nodes()
@@ -36,7 +41,7 @@ def _scan_pool():
             p = n.get("pool", "default")
             by_pool[p] = by_pool.get(p, 0) + 1
         metrics.observe_pool(len(nodes_all), len(healthy), by_region, by_pool)
-    except Exception as exc:  # 采集失败不影响 API
+    except Exception as exc:
         logger.warning("pool scan failed: %s", exc)
 
 
@@ -47,24 +52,20 @@ async def _pool_observer(interval: float = 15.0):
 
 
 async def _health_check_loop():
-    """周期执行健康检查（TCP/HTTP 探活 + 状态机防抖）。"""
     from .services.health_checker import HealthChecker
-
     checker = HealthChecker()
     while True:
         try:
             checker.run_once()
-        except Exception as exc:  # 单轮失败不影响下一轮
+        except Exception as exc:
             logger.warning("health check run failed: %s", exc)
         await asyncio.sleep(checker.interval)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 审计表结构（PG 启用时初始化，失败仅告警）
     try:
         from .repositories.audit_repository import AuditRepository
-
         AuditRepository().init_schema()
     except Exception as exc:
         logger.warning("audit schema init skipped: %s", exc)
@@ -102,3 +103,18 @@ def version():
 @app.get("/metrics")
 def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+# --- Web UI SPA (catch-all, runs after API routes) ---
+
+@app.get("/{full_path:path}")
+async def serve_web(full_path: str):
+    """Serve Web UI static files or index.html for SPA routing."""
+    if full_path:
+        target = os.path.join(_WEB_DIR, full_path)
+        if os.path.isfile(target):
+            return FileResponse(target)
+    index = os.path.join(_WEB_DIR, "index.html")
+    if os.path.isfile(index):
+        return FileResponse(index)
+    return Response("Web UI not built. Run: cd web && npm run build", status_code=404)

@@ -10,6 +10,7 @@ services:
       - REDIS_PORT=6380
       - REDIS_DB=0
       - POOL_PREFIX=proxy-pool
+      - WEB_DIR=/web/dist
       # 管理 API 认证（生产必配；逗号分隔多个 Key / IP·CIDR）
       - PP_API_KEYS=${PP_API_KEYS:-}
       - PP_IP_WHITELIST=${PP_IP_WHITELIST:-}
@@ -33,6 +34,8 @@ services:
       - PG_USER=${PG_USER:-proxy_pool}
       - PG_PASSWORD=${PG_PASSWORD:-proxy_pool}
       - PP_QUALITY_MIN_REQUESTS=${PP_QUALITY_MIN_REQUESTS:-20}
+    volumes:
+      - ./web/dist:/web/dist:ro
     depends_on:
       - redis
       - postgres
@@ -99,3 +102,4 @@ volumes:
 networks:
   pp-net:
     driver: bridge
+

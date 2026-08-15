@@ -20,9 +20,7 @@
 ### 获取一个代理
 
 ```bash
-curl -s -X POST http://158.180.87.150:8082/api/v1/proxies/acquire \
-  -H "Content-Type: application/json" \
-  -d '{}'
+curl -s "http://158.180.87.150:8082/api/v1/proxies/acquire?region=US"
 ```
 
 返回示例：
@@ -86,7 +84,7 @@ print(resp.json())
 | POST | `/api/v1/nodes/register` | 注册新节点 |
 | POST | `/api/v1/nodes/{node_id}/heartbeat` | 节点心跳 |
 | DELETE | `/api/v1/nodes/{node_id}` | 删除节点 |
-| POST | `/api/v1/proxies/acquire` | 获取一个可用代理 |
+| GET | `/api/v1/proxies/acquire` | 获取一个可用代理 (query param) |
 | POST | `/api/v1/proxies/report` | 上报代理使用结果 |
 
 ### 获取代理列表
@@ -105,21 +103,21 @@ curl -s http://158.180.87.150:8082/api/v1/nodes/proxy-161.33.44.38
 ### 获取代理（动态调度）
 
 ```bash
-curl -s -X POST http://158.180.87.150:8082/api/v1/proxies/acquire \
-  -H "Content-Type: application/json" \
-  -d '{}'
+# GET 接口 (注意: 用 query param 传 region, 不是 POST body)
+curl -s "http://158.180.87.150:8082/api/v1/proxies/acquire?region=US"
+# 不带 region 则任意区域:
+curl -s "http://158.180.87.150:8082/api/v1/proxies/acquire"
 ```
 
-支持参数：
+支持参数: 仅 `region` (协议是节点固有属性, 不做请求过滤):
 
-```json
-{
-  "region": "US",         // 可选，指定区域
-  "protocol": "http"      // 可选，http / socks5
-}
+```
+?region=US     // 可选，指定区域 (US/EU/AP)
 ```
 
 调度策略：健康检查 + 自动故障转移 → 选择成功率最高、连接数最少的节点。
+
+> ⚠️ 真实接口是 **GET**。旧版本文档写的 `POST /api/v1/proxies/acquire` 有误。
 
 ### 上报代理使用结果
 
@@ -131,9 +129,11 @@ curl -s -X POST http://158.180.87.150:8082/api/v1/proxies/report \
   -d '{
     "node_id": "proxy-161.33.44.38",
     "success": true,
-    "latency_ms": 280
+    "latency": 0.28
   }'
 ```
+
+> ⚠️ 上报字段是 **`latency`**（秒，float），不是 `latency_ms`。
 
 ### 注册新节点（部署时才用）
 
@@ -156,6 +156,10 @@ curl -s -X POST http://158.180.87.150:8082/api/v1/nodes/register \
 ---
 
 ## 编程使用
+
+> 💡 **推荐直接使用可复用客户端** `client/`（`proxypool_client.ProxyPool`）：
+> 已按真实接口实现（GET acquire / latency 上报），含自动重试、故障切换、会话模式。
+> 下方是纯 requests 手写示例，仅作参考。
 
 ### Python 封装示例
 
