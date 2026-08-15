@@ -104,6 +104,16 @@ class NodeRepository:
             "status": status,
         })
 
+    def update_meta(self, node_id, data: dict, overwrite_core: bool = False):
+        """Update node metadata (e.g. geo enrichment) without overwriting core fields."""
+        core = set() if overwrite_core else {"node_id","ip","port","region","pool","isp","protocol","username","password","status"}
+        mapping = {k: str(v) for k,v in data.items() if k not in core and v}
+        if mapping:
+            self.r.hset(self._key(node_id), mapping=mapping)
+        return self.get(node_id)
+
+
+
     def healthy_nodes(self, region=None, pool=None, isp=None):
         """健康节点列表，支持 region / pool（业务专属池）/ isp 多维过滤。"""
         ids = self.r.smembers(self.pk)

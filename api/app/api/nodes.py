@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from .. import metrics
 from ..core.security import require_api_key
 from ..repositories.audit_repository import AuditRepository
 from ..repositories.node_repository import NodeRepository, NodeNotFoundError, NoHealthyNodeError
+from ..services import geo_enricher
 
 router = APIRouter(prefix="/api/v1", tags=["nodes"], dependencies=[Depends(require_api_key)])
 
@@ -27,15 +28,38 @@ def _scan_and_refresh():
             by_pool[p] = by_pool.get(p, 0) + 1
         metrics.observe_pool(len(nodes_all), len(healthy), by_region, by_pool)
     except Exception:
-        # 采集失败不影响业务返回
         pass
 
 
 @router.get("/nodes")
-def list_nodes(region: str | None = None, pool: str | None = None, isp: str | None = None):
+def list_nodes(
+    region: str | None = None,
+    pool: str | None = None,
+    isp: str | None = None,
+    include_all: bool = Query(False, description="Include non-healthy nodes as well"),
+):
+    """List nodes with full details. Filters by region/pool/isp (AND logic)."""
     try:
-        return {"nodes": _repo().healthy_nodes(region, pool=pool, isp=isp)}
+        repo = _repo()
+        if include_all:
+            all_nodes = repo.all_nodes()
+            result = []
+            for n in all_nodes:
+                if region and n.get("region") != region:
+                    continue
+                if pool and n.get("pool", "default") != pool:
+                    continue
+                if isp and n.get("isp", "") != isp:
+                    continue
+                result.append(n)
+            return {"nodes": result}
+        else:
+            ids = repo.healthy_nodes(region, pool=pool, isp=isp)
+            nodes = [repo.get(nid) for nid in ids]
+            return {"nodes": nodes}
     except NoHealthyNodeError:
+        return {"nodes": []}
+    except NodeNotFoundError:
         return {"nodes": []}
 
 
@@ -46,6 +70,12 @@ def register_node(body: dict):
     AuditRepository().record_node_event(node["node_id"], "registered", new_status="healthy")
     metrics.NODE_STATE_CHANGES.labels(transition="registered").inc()
     _scan_and_refresh()
+    # Auto-enrich geo data
+    try:
+        enriched = geo_enricher.enrich_node(node)
+        _repo().update_meta(node["node_id"], enriched, overwrite_core=True)
+    except Exception:
+        pass
     return {"node_id": node["node_id"]}
 
 
@@ -134,6 +164,37 @@ def unban_node(node_id: str):
     _scan_and_refresh()
     return {"node_id": node["node_id"], "status": node["status"]}
 
+
+# ---------- 地理信息增强 ----------
+
+
+@router.post("/nodes/{node_id}/enrich")
+def enrich_single(node_id: str):
+    """向 ipwho.is 查询节点的地理信息并存入 Redis。"""
+    try:
+        node = _repo().get(node_id)
+    except NodeNotFoundError:
+        raise HTTPException(404, f"node {node_id} not found")
+    enriched = geo_enricher.enrich_node(dict(node))
+    _repo().update_meta(node_id, enriched, overwrite_core=True)
+    return {"node_id": node_id, "geo": {k: v for k, v in enriched.items() if k.startswith("geo_")}}
+
+
+@router.post("/nodes/enrich-all")
+def enrich_all():
+    """批量刷新全部节点的地理信息。"""
+    nodes = _repo().all_nodes()
+    results = []
+    for node in nodes:
+        try:
+            enriched = geo_enricher.enrich_node(dict(node))
+            _repo().update_meta(node["node_id"], enriched, overwrite_core=True)
+            results.append({"node_id": node["node_id"], "success": True})
+        except Exception as exc:
+            results.append({"node_id": node["node_id"], "success": False, "error": str(exc)})
+    return {"total": len(nodes), "results": results}
+
+
 # ---------- 审计历史查询（PostgreSQL） ----------
 
 
@@ -153,3 +214,4 @@ def audit_acquires(node_id: str | None = None, limit: int = 50):
 def audit_reports(node_id: str | None = None, limit: int = 50):
     """使用上报历史。"""
     return {"reports": AuditRepository().query_reports(node_id=node_id, limit=min(limit, 500))}
+
